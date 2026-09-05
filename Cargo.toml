@@ -1,0 +1,18 @@
+[package]
+name = "shepherd"
+version = "0.1.0"
+edition = "2021"
+description = "A dependency-free Kubernetes-style reconciliation control loop over a deterministic cluster simulator"
+license = "MIT"
+repository = "https://github.com/pavanchow/shepherd"
+
+[[bin]]
+name = "shepherd"
+path = "src/bin/shepherd.rs"
+
+[lib]
+name = "shepherd"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
