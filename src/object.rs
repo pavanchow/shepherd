@@ -16,10 +16,11 @@ pub type Labels = BTreeMap<String, String>;
 pub type Selector = BTreeMap<String, String>;
 
 /// Return true when `labels` satisfies every entry of `selector`.
+#[must_use]
 pub fn selector_matches(selector: &Selector, labels: &Labels) -> bool {
     selector
         .iter()
-        .all(|(k, v)| labels.get(k).map(|found| found == v).unwrap_or(false))
+        .all(|(k, v)| labels.get(k).is_some_and(|found| found == v))
 }
 
 /// A compute resource pair. CPU is measured in millicores, memory in MiB.
@@ -43,16 +44,19 @@ impl std::ops::Add for Resources {
 
 impl Resources {
     /// Build a resource pair.
+    #[must_use]
     pub fn new(cpu: u64, mem: u64) -> Self {
         Resources { cpu, mem }
     }
 
     /// True when `self` fits within `capacity` on every dimension.
+    #[must_use]
     pub fn fits_within(self, capacity: Resources) -> bool {
         self.cpu <= capacity.cpu && self.mem <= capacity.mem
     }
 
     /// Component wise saturating subtraction (never underflows below zero).
+    #[must_use]
     pub fn saturating_sub(self, other: Resources) -> Resources {
         Resources::new(
             self.cpu.saturating_sub(other.cpu),
@@ -79,6 +83,7 @@ pub struct Taint {
 
 impl Taint {
     /// Build a `NoSchedule` taint.
+    #[must_use]
     pub fn no_schedule(key: &str, value: &str) -> Self {
         Taint {
             key: key.to_string(),
@@ -98,6 +103,7 @@ pub struct Toleration {
 
 impl Toleration {
     /// Tolerate a specific key/value pair.
+    #[must_use]
     pub fn exact(key: &str, value: &str) -> Self {
         Toleration {
             key: key.to_string(),
@@ -106,6 +112,7 @@ impl Toleration {
     }
 
     /// Tolerate any taint carrying this key regardless of value.
+    #[must_use]
     pub fn any_value(key: &str) -> Self {
         Toleration {
             key: key.to_string(),
@@ -114,6 +121,7 @@ impl Toleration {
     }
 
     /// True when this toleration covers the given taint.
+    #[must_use]
     pub fn tolerates(&self, taint: &Taint) -> bool {
         if self.key != taint.key {
             return false;
@@ -148,6 +156,7 @@ pub struct PodTemplate {
 
 impl PodTemplate {
     /// A minimal template requesting the given resources.
+    #[must_use]
     pub fn new(cpu: u64, mem: u64) -> Self {
         PodTemplate {
             requests: Resources::new(cpu, mem),
@@ -156,12 +165,14 @@ impl PodTemplate {
     }
 
     /// Attach a label (builder style).
+    #[must_use]
     pub fn with_label(mut self, key: &str, value: &str) -> Self {
         self.labels.insert(key.to_string(), value.to_string());
         self
     }
 
     /// Constrain to nodes carrying this label (builder style).
+    #[must_use]
     pub fn with_node_selector(mut self, key: &str, value: &str) -> Self {
         self.node_selector
             .insert(key.to_string(), value.to_string());
@@ -169,12 +180,14 @@ impl PodTemplate {
     }
 
     /// Add a toleration (builder style).
+    #[must_use]
     pub fn with_toleration(mut self, toleration: Toleration) -> Self {
         self.tolerations.push(toleration);
         self
     }
 
     /// Add an affinity term (builder style).
+    #[must_use]
     pub fn with_affinity(mut self, term: AffinityTerm) -> Self {
         self.affinity.push(term);
         self
@@ -205,6 +218,7 @@ pub struct Pod {
 
 impl Pod {
     /// Create a fresh pending pod from a template.
+    #[must_use]
     pub fn pending(id: String, owner: String, spec: PodTemplate) -> Self {
         Pod {
             id,
@@ -233,6 +247,7 @@ pub struct Node {
 
 impl Node {
     /// Build a healthy node with the given capacity.
+    #[must_use]
     pub fn new(id: &str, cpu: u64, mem: u64) -> Self {
         Node {
             id: id.to_string(),
@@ -246,12 +261,14 @@ impl Node {
     }
 
     /// Attach a label (builder style).
+    #[must_use]
     pub fn with_label(mut self, key: &str, value: &str) -> Self {
         self.labels.insert(key.to_string(), value.to_string());
         self
     }
 
     /// Attach a taint (builder style).
+    #[must_use]
     pub fn with_taint(mut self, taint: Taint) -> Self {
         self.taints.push(taint);
         self
@@ -273,27 +290,102 @@ pub struct Controller {
     pub kind: ControllerKind,
     pub replicas: u32,
     pub template: PodTemplate,
+    /// Rolling update settings applied when the template changes after pods
+    /// already exist. Changing `template` starts a roll that rotates pods
+    /// stamped from the previous template onto the new one.
+    pub rollout: RolloutSettings,
 }
 
 impl Controller {
     /// Build a deployment controller.
+    #[must_use]
     pub fn deployment(name: &str, replicas: u32, template: PodTemplate) -> Self {
         Controller {
             name: name.to_string(),
             kind: ControllerKind::Deployment,
             replicas,
             template,
+            rollout: RolloutSettings::default(),
         }
     }
 
     /// Build a replica set controller.
+    #[must_use]
     pub fn replica_set(name: &str, replicas: u32, template: PodTemplate) -> Self {
         Controller {
             name: name.to_string(),
             kind: ControllerKind::ReplicaSet,
             replicas,
             template,
+            rollout: RolloutSettings::default(),
         }
+    }
+}
+
+/// How aggressively a rolling update may disrupt the workload.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RolloutSettings {
+    /// How many replicas below `replicas` the running count may dip while the
+    /// roll evicts old pods. The running count never goes under
+    /// `replicas - max_unavailable` because of the roll.
+    pub max_unavailable: u32,
+    /// How many pods above `replicas` may exist temporarily while the roll
+    /// creates new pods ahead of evicting old ones.
+    pub max_surge: u32,
+}
+
+impl RolloutSettings {
+    /// Explicit settings.
+    #[must_use]
+    pub fn new(max_unavailable: u32, max_surge: u32) -> Self {
+        RolloutSettings {
+            max_unavailable,
+            max_surge,
+        }
+    }
+}
+
+impl Default for RolloutSettings {
+    /// One unavailable, one surging: the smallest settings that let a roll
+    /// always make progress. Settings where both are zero cannot rotate any
+    /// pod and stall the roll at its fixed point.
+    fn default() -> Self {
+        RolloutSettings {
+            max_unavailable: 1,
+            max_surge: 1,
+        }
+    }
+}
+
+/// A budget that limits how many pods matching a selector may be disrupted
+/// (voluntarily evicted) at the same time. While the matched running count is
+/// at `baseline - max_unavailable` or below, evictions that would dip further
+/// are refused. The baseline is the owning controller's replica count, or the
+/// current matched running count when the pods have no controller.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PodDisruptionBudget {
+    pub name: String,
+    pub selector: Selector,
+    pub max_unavailable: u32,
+}
+
+impl PodDisruptionBudget {
+    /// A budget named `name` allowing `max_unavailable` simultaneous
+    /// disruptions of pods matching its selector.
+    #[must_use]
+    pub fn new(name: &str, max_unavailable: u32) -> Self {
+        PodDisruptionBudget {
+            name: name.to_string(),
+            selector: Selector::new(),
+            max_unavailable,
+        }
+    }
+
+    /// Match pods carrying this label (builder style).
+    #[must_use]
+    pub fn with_selector(mut self, key: &str, value: &str) -> Self {
+        self.selector.insert(key.to_string(), value.to_string());
+        self
     }
 }
 

@@ -13,10 +13,13 @@
 //!
 //! ## Modules
 //!
-//! - [`object`] declarative nouns: nodes, pods, controllers, constraints.
+//! - [`object`] declarative nouns: nodes, pods, controllers, constraints,
+//!   disruption budgets.
 //! - [`cluster`] observed state plus the mutations that change it.
 //! - [`scheduler`] filter, score and bind a pending pod.
-//! - [`reconciler`] the control loop that reaches a fixed point.
+//! - [`reconciler`] the control loop that reaches a fixed point, including
+//!   rolling updates.
+//! - [`rollout`] voluntary evictions under disruption budgets.
 //! - [`verify`] independent invariant checkers used by the gate.
 //! - [`simulator`] deterministic time, PRNG and scriptable events.
 //! - [`clock`], [`rng`] the injected sources of time and randomness.
@@ -45,6 +48,7 @@ pub mod cluster;
 pub mod object;
 pub mod reconciler;
 pub mod rng;
+pub mod rollout;
 pub mod scheduler;
 pub mod simulator;
 pub mod verify;

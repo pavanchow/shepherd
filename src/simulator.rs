@@ -9,7 +9,7 @@
 
 use crate::clock::Clock;
 use crate::cluster::Cluster;
-use crate::object::{Controller, Node};
+use crate::object::{Controller, Node, PodDisruptionBudget, PodTemplate};
 use crate::reconciler::{reconcile_to_fixed_point, Convergence};
 use crate::rng::Rng;
 use crate::scheduler::ScorePolicy;
@@ -23,6 +23,10 @@ pub enum Event {
     RemoveController(String),
     FailNode(String),
     RecoverNode(String),
+    AddPdb(PodDisruptionBudget),
+    /// Replace a controller's template, which starts a rolling update that
+    /// rotates existing pods onto the new template.
+    UpdateTemplate { name: String, template: PodTemplate },
 }
 
 /// An event bound to the tick it should fire on.
@@ -45,6 +49,7 @@ pub struct Simulator {
 impl Simulator {
     /// Create a simulator with a seed, a placement policy and a heartbeat
     /// timeout expressed in ticks.
+    #[must_use]
     pub fn new(seed: u64, policy: ScorePolicy, heartbeat_timeout: u64) -> Self {
         Simulator {
             cluster: Cluster::new(heartbeat_timeout),
@@ -75,6 +80,12 @@ impl Simulator {
             Event::RemoveController(name) => self.cluster.remove_controller(&name),
             Event::FailNode(id) => self.cluster.fail_node(&id),
             Event::RecoverNode(id) => self.cluster.recover_node(&id),
+            Event::AddPdb(pdb) => self.cluster.add_pdb(pdb),
+            Event::UpdateTemplate { name, template } => {
+                if let Some(c) = self.cluster.controllers.get_mut(&name) {
+                    c.template = template;
+                }
+            }
         }
     }
 
