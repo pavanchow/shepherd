@@ -1,6 +1,6 @@
 //! Independent invariant checkers used by the correctness gate.
 //!
-//! These functions re read the final cluster state and confirm the properties
+//! These functions reread the final cluster state and confirm the properties
 //! Shepherd promises, without trusting the code paths that produced that state.
 //! Checking constraints from scratch is what makes the fuzz tests meaningful:
 //! the scheduler could be wrong and these checkers would still catch it.
@@ -9,19 +9,19 @@ use crate::cluster::Cluster;
 use crate::object::{selector_matches, AffinityTerm, PodPhase};
 
 /// Confirm every running pod honours the constraints under which it was placed.
+///
+/// # Errors
 /// Returns `Err` with a description of the first violation found.
 pub fn verify_constraints(cluster: &Cluster) -> Result<(), String> {
     for pod in cluster.pods.values() {
         if pod.phase != PodPhase::Running {
             continue;
         }
-        let node_id = match &pod.node {
-            Some(n) => n,
-            None => return Err(format!("running pod {} has no node", pod.id)),
+        let Some(node_id) = &pod.node else {
+            return Err(format!("running pod {} has no node", pod.id));
         };
-        let node = match cluster.nodes.get(node_id) {
-            Some(n) => n,
-            None => return Err(format!("pod {} bound to missing node {}", pod.id, node_id)),
+        let Some(node) = cluster.nodes.get(node_id) else {
+            return Err(format!("pod {} bound to missing node {}", pod.id, node_id));
         };
 
         if !node.healthy {

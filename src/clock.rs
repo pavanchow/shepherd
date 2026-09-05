@@ -13,11 +13,13 @@ pub struct Clock {
 
 impl Clock {
     /// Create a clock started at the given tick.
+    #[must_use]
     pub fn new(start: u64) -> Self {
         Clock { now: start }
     }
 
     /// The current tick.
+    #[must_use]
     pub fn now(&self) -> u64 {
         self.now
     }

@@ -32,8 +32,9 @@ pub enum InfeasibleReason {
 }
 
 /// Evaluate every hard constraint for placing `pod` on `node`.
-/// Returns `Ok(())` if the node is feasible, otherwise the first reason it is
-/// not.
+///
+/// # Errors
+/// Returns the first reason the node is not feasible for the pod.
 pub fn feasibility(cluster: &Cluster, node: &Node, pod: &Pod) -> Result<(), InfeasibleReason> {
     if !node.healthy {
         return Err(InfeasibleReason::NodeUnhealthy);
@@ -73,6 +74,7 @@ pub fn feasibility(cluster: &Cluster, node: &Node, pod: &Pod) -> Result<(), Infe
 }
 
 /// True when the node is a feasible target for the pod.
+#[must_use]
 pub fn feasible(cluster: &Cluster, node: &Node, pod: &Pod) -> bool {
     feasibility(cluster, node, pod).is_ok()
 }
@@ -81,7 +83,11 @@ pub fn feasible(cluster: &Cluster, node: &Node, pod: &Pod) -> bool {
 fn score(policy: ScorePolicy, cluster: &Cluster, node: &Node, pod: &Pod) -> i64 {
     let free = cluster.free(&node.id);
     let remaining = free.saturating_sub(pod.spec.requests);
-    let slack = remaining.cpu as i64 + remaining.mem as i64;
+    // Saturating conversion: capacities beyond the i64 range must clamp rather
+    // than wrap, or scores become incomparable and tie breaks break down.
+    let cpu = i64::try_from(remaining.cpu).unwrap_or(i64::MAX);
+    let mem = i64::try_from(remaining.mem).unwrap_or(i64::MAX);
+    let slack = cpu.saturating_add(mem);
     match policy {
         // Least leftover wins, so negate.
         ScorePolicy::BinPack => -slack,
@@ -94,6 +100,7 @@ fn score(policy: ScorePolicy, cluster: &Cluster, node: &Node, pod: &Pod) -> i64 
 /// is unschedulable right now. Ties are broken by lowest node id because nodes
 /// are visited in sorted order and a strictly greater score is required to
 /// replace the incumbent.
+#[must_use]
 pub fn choose_node(cluster: &Cluster, pod: &Pod, policy: ScorePolicy) -> Option<String> {
     let mut best: Option<(i64, String)> = None;
     for node in cluster.nodes.values() {
@@ -112,6 +119,10 @@ pub fn choose_node(cluster: &Cluster, pod: &Pod, policy: ScorePolicy) -> Option<
 /// Attempt to bind a single pending pod. On success the pod becomes `Running`
 /// on the chosen node and `true` is returned. If no node is feasible the pod
 /// stays `Pending` and `false` is returned.
+///
+/// # Panics
+/// Panics if the pod disappeared from the cluster between the lookup and the
+/// bind, which cannot happen through public APIs.
 pub fn schedule_pod(cluster: &mut Cluster, pod_id: &str, policy: ScorePolicy) -> bool {
     let pod = match cluster.pods.get(pod_id) {
         Some(p) if p.phase == PodPhase::Pending => p.clone(),
@@ -190,6 +201,17 @@ mod tests {
             PodTemplate::new(100, 100).with_toleration(Toleration::exact("gpu", "true")),
         );
         assert!(schedule_pod(&mut c, &tolerant, ScorePolicy::BinPack));
+    }
+
+    #[test]
+    fn huge_capacities_do_not_break_scoring() {
+        let mut c = Cluster::new(3);
+        c.add_node(Node::new("huge", u64::MAX / 2, u64::MAX / 2), 0);
+        c.add_node(Node::new("big", 4000, 4000), 0);
+        let id = c.create_pod("web", PodTemplate::new(1, 1));
+        // Scores clamp instead of overflowing on absurd capacities.
+        assert!(schedule_pod(&mut c, &id, ScorePolicy::BinPack));
+        assert!(c.verify_capacity().is_ok());
     }
 
     #[test]

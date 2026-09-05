@@ -18,7 +18,7 @@ use shepherd::simulator::{Event, Simulator};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let command = args.get(1).map(String::as_str).unwrap_or("help");
+    let command = args.get(1).map_or("help", String::as_str);
     match command {
         "demo" => demo(),
         "converge" => converge(&args[2..]),
@@ -45,7 +45,8 @@ fn bar(used: u64, capacity: u64, width: usize) -> String {
     let filled = if capacity == 0 {
         0
     } else {
-        ((used as u128 * width as u128) / capacity as u128) as usize
+        ((u128::from(used) * u128::try_from(width).unwrap_or(u128::MAX)) / u128::from(capacity))
+            as usize
     };
     let filled = filled.min(width);
     let pct = (used * 100).checked_div(capacity).unwrap_or(0);
@@ -191,6 +192,8 @@ fn converge(args: &[String]) {
     }
 
     for i in 0..app_count {
+        // Replica counts are tiny by construction, the cast cannot truncate.
+        #[allow(clippy::cast_possible_truncation)]
         let replicas = rng.range(1, 6) as u32;
         let cpu = rng.range(1, 3) * 500;
         let mem = rng.range(1, 3) * 512;
