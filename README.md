@@ -6,9 +6,11 @@ Shepherd continuously drives the observed state of a cluster toward a declared
 desired state. You declare nodes and controllers (a replica count plus a pod
 template), and Shepherd schedules pods onto nodes by resource fit and
 constraints, keeps replica counts satisfied, reschedules pods when a node fails,
-and bin packs to keep the cluster tight. It runs over a deterministic node and
-pod simulator with an injected clock and a seeded event stream, so every run is
-reproducible.
+and bin packs to keep the cluster tight. Changing a controller template rolls
+the workload onto the new version under maxUnavailable and maxSurge bounds,
+while a PodDisruptionBudget caps how many pods may be disrupted at once. It
+runs over a deterministic node and pod simulator with an injected clock and a
+seeded event stream, so every run is reproducible.
 
 Zero external dependencies. Pure Rust standard library, edition 2021.
 
@@ -79,11 +81,14 @@ nodes and reconciles to a fixed point.
 Module map:
 
 - `object` the declarative nouns: `Node`, `Pod`, `Controller`, `Resources`,
-  taints, tolerations, selectors and affinity terms.
+  taints, tolerations, selectors, affinity terms and
+  `PodDisruptionBudget`.
 - `cluster` the observed state and the mutations that change it.
 - `scheduler` filter feasible nodes, score them, bind (`ScorePolicy::BinPack`
   or `LeastLoaded`).
 - `reconciler` `reconcile_once`, `reconcile_to_fixed_point`, `fully_satisfied`.
+- `rollout` voluntary eviction under disruption budgets (`evict_pod`) and
+  rollout inspection helpers.
 - `verify` independent invariant checkers used by the gate.
 - `simulator` deterministic time, PRNG and scriptable events.
 - `clock`, `rng` the injected sources of time and randomness.
@@ -91,7 +96,7 @@ Module map:
 ## The correctness gate
 
 The provable core is that the reconciler converges and never overcommits a node.
-Four randomized property tests in `tests/gate.rs` enforce it, each re checking
+Eight randomized property tests in `tests/gate.rs` enforce it, each rechecking
 its property from scratch with independent verifiers:
 
 1. **Convergence.** From random nodes and controller specs, reconciling to a
@@ -106,6 +111,33 @@ its property from scratch with independent verifiers:
    produces identical placement.
 4. **Constraints respected.** No binding ever violates a taint, node selector,
    affinity or anti affinity rule.
+5. **Adversarial edges.** Zero-replica apps, pods that fit no node, node
+   selectors naming zones that do not exist and affinity naming labels nothing
+   carries all settle as clean fixed points. Unschedulable pods stay `Pending`
+   forever without blocking their schedulable neighbours.
+6. **Duplicate nodes and rejoins.** Re-registering a node id with a smaller,
+   tainted or relabelled body releases its running pods instead of leaving
+   them overcommitted or in violation, and a node that fails and rejoins
+   never leaves ghost bindings behind.
+7. **Capacity boundary.** A pod whose request exactly equals node capacity
+   fits, and one unit more on any axis does not, across random boundary
+   values.
+8. **Idempotence.** Reconciling a converged constrained cluster again under
+   either policy is a placement no-op with an identical pod-to-node map.
+
+A second file, `tests/rollout.rs`, gates the rolling update feature:
+
+- **Floor and surge.** A template roll never dips the running count below
+  `replicas - maxUnavailable`, never exceeds `replicas + maxSurge` live pods,
+  completes with every pod on the new template, and is deterministic. Capacity
+  and constraint verifiers hold after every pass.
+- **Disruption budgets.** An eviction that would breach a
+  `PodDisruptionBudget` is refused through the direct API and pauses a roll's
+  rotation at the budget floor.
+- **Failed rollbacks.** A roll onto an unschedulable template stalls honestly
+  without breaching its floor and rolls back cleanly to the previous one.
+- **Rolls through failure.** A node killed mid roll keeps every verifier green
+  and the roll still completes with the desired count restored.
 
 The sweep size is bounded by `SHEPHERD_FUZZ_OPS` (default 200) so CI stays fast
 and a developer can crank it up:

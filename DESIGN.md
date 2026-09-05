@@ -23,8 +23,11 @@ The crate is a thin stack of modules, each with one job.
   that mutate it. All collections are ordered maps so iteration is
   deterministic.
 - `scheduler` the placement pipeline: filter, score, bind.
-- `reconciler` the control loop that drives observed state to desired state.
-- `verify` independent invariant checkers that re read final state from scratch.
+- `reconciler` the control loop that drives observed state to desired state,
+  including rolling updates.
+- `rollout` voluntary eviction under disruption budgets and rollout inspection
+  helpers.
+- `verify` independent invariant checkers that reread final state from scratch.
 - `simulator` the deterministic driver that ties clock, PRNG, cluster and a
   script of events together.
 
@@ -45,7 +48,16 @@ emits heartbeats), and the tick of its last heartbeat.
 A **Controller** (a deployment or a replica set, both reconcile identically)
 declares a desired replica count and a **PodTemplate**. The template carries the
 resource requests, labels, a node selector, a list of tolerations, and a list of
-affinity terms.
+affinity terms. A controller also carries **RolloutSettings**
+(`max_unavailable`, `max_surge`) that bound how disruptively the workload rolls
+onto a new template.
+
+A **PodDisruptionBudget** names a selector and a `max_unavailable` count. It
+caps how many pods matching the selector may be voluntarily disrupted at once.
+The baseline for the budget is the owning controller's replica count, or the
+current matched running count when the pods have no controller. An eviction
+that would dip the matched running count below `baseline - max_unavailable`
+is refused.
 
 The reconciler materializes templates into **Pod** objects. A pod has an id, its
 owning controller, a copy of the template it was stamped from, an optional bound
@@ -59,6 +71,15 @@ taint when the keys match and either the values match or the toleration accepts
 any value. An affinity term is either `Affinity(selector)` (require a co located
 running pod matching the selector on the same node) or `AntiAffinity(selector)`
 (forbid one).
+
+Node registration is total. Re-registering an id that already exists replaces
+the node object and releases every running pod bound to it back to `Pending`,
+so the reconciler revalidates the pods against the new capacity, labels and
+taints. Without that rule a duplicate registration with a smaller body could
+silently leave a node overcommitted or hosting pods that violate their
+constraints. Heartbeats from a node that has stopped beating are ignored, so an
+out of band heartbeat cannot revive a dead node and hand the scheduler a corpse
+to place on.
 
 ## Scheduler: filter then score
 
@@ -139,12 +160,52 @@ If they do not, the shortfall shows up as pending pods, which is the correct
 report. A recovered node starts beating again and regains health on its next
 heartbeat, rejoining the pool for future placements.
 
+## Rolling updates and disruption budgets
+
+Replacing a controller's template while its pods exist starts a rolling update.
+A pod is a member of the *new revision* when its stamped spec equals the
+controller's current template, and of the *old revision* otherwise. A pass
+whose controller has old revision pods runs `roll_forward` instead of the plain
+count reconciliation. The step does three things in order.
+
+1. Remove old revision **pending** pods. They hold no availability, so
+   removing them is free and unblocks the accounting.
+2. Drive the live total toward the **surge target** (`replicas + max_surge`)
+   by creating new revision pods. When a mid roll scale down leaves surplus,
+   the surplus is removed preferring old revision pods first, then pending
+   pods, then the highest ids.
+3. **Rotate.** Evict old revision running pods, highest id first, while the
+   running count has headroom above the **availability floor**
+   (`replicas - max_unavailable`). Each eviction goes through `evict_pod`,
+   which refuses the removal when any matching `PodDisruptionBudget` would be
+   breached, so a budget pauses the rotation at the budget floor even when the
+   controller's own settings would allow dipping deeper. The floor used for
+   the pause is the stricter of the two.
+
+The roll terminates. Every pass either removes an old revision pod, creates
+toward the surge target, or schedules a pending pod. Old revision pods are
+finite, creations stop at the surge target, and scheduling is monotone, so a
+pass eventually reports no change. When the new template is unschedulable the
+roll stalls at an honest fixed point: old pods stay running, up to
+`max_unavailable` of them evicted, new pods pending, and nothing oscillates.
+Setting the template back to the previous version rolls back, because the
+pending new revision pods become old revision pods that are removed for free
+and replacements are recreated on the old template. Settings where
+`max_unavailable` and `max_surge` are both zero cannot rotate any pod and
+stall by construction, which is why the defaults are one and one.
+
+`evict_pod` is also a public API for maintenance evictions outside a roll. It
+refuses when the pod is unknown, not running, or a matching budget refuses.
+Node failure evictions are involuntary and deliberately bypass budgets, as in
+real orchestrators.
+
 ## Why each gate proves its claim
 
-The gate lives in `tests/gate.rs`. Every gate re checks its property from
-scratch with the checkers in `verify` and `Cluster::verify_capacity`, so a bug in
-the scheduler cannot be masked by the code that produced the state. The sweep
-size is set by `SHEPHERD_FUZZ_OPS`.
+The gate lives in `tests/gate.rs`, with the rollout properties in
+`tests/rollout.rs`. Every gate rechecks its property from scratch with the
+checkers in `verify` and `Cluster::verify_capacity`, so a bug in the scheduler
+cannot be masked by the code that produced the state. The sweep size is set by
+`SHEPHERD_FUZZ_OPS`.
 
 **Convergence.** For many seeds it builds a random cluster, reconciles to a fixed
 point, and asserts the loop reported convergence. It then runs one more pass and
@@ -169,6 +230,49 @@ failure.
 
 **Constraints respected.** It builds a random cluster that exercises taints,
 node selectors and anti affinity, reconciles to a fixed point, and runs
-`verify_constraints`, which re checks every running pod against its node for
+`verify_constraints`, which rechecks every running pod against its node for
 selector match, taint toleration, and affinity and anti affinity, independently
 of the scheduler that made the decisions.
+
+**Adversarial edges.** It reconciles clusters containing zero replica apps,
+oversized pods, ghost zone selectors and affinity against labels nothing
+carries. It asserts each settles at a fixed point, that unschedulable pods
+remain pending while their schedulable neighbours converge, that a further pass
+changes nothing, and that capacity and constraint verifiers stay clean.
+
+**Duplicate nodes and rejoins.** It re-registers a live node id with a smaller,
+tainted, relabelled body and asserts the capacity and constraint invariants
+survive, the released pods reconverge onto the survivors, and the cluster is
+idempotent afterwards. It then kills a node in the simulator, lets the failure
+trip and replacements land, rejoins the node, and asserts every running pod is
+bound to an existing, healthy, beating node, which rules out ghost bindings.
+
+**Capacity boundary.** For random boundary values on both resource axes it
+places a pod whose request exactly equals node capacity and asserts full
+satisfaction, then a pod one unit larger on either axis and asserts it stays
+pending with capacity clean.
+
+**Idempotence.** It snapshots the pod-to-node map of a converged constrained
+cluster, runs one more pass under the same and under the other policy, and
+asserts the report is empty and the snapshot identical.
+
+**Rollout floor and surge.** After every single pass of a roll it asserts the
+running count never dipped below `replicas - maxUnavailable`, the live count
+never exceeded `replicas + maxSurge`, and both verifiers hold. At the end it
+asserts no old revision pod remains and an identical rerun reproduces the
+placement exactly.
+
+**Disruption budgets.** It evicts directly until a budget refuses and asserts
+the refusal names the budget and leaves the pod in place. It then rolls a
+controller whose own settings allow two unavailable pods under a budget that
+allows one and asserts the rotation completes without ever dipping below the
+budget floor.
+
+**Failed rollbacks.** It rolls onto a template no node can fit, asserts the
+stall keeps the floor and the verifiers, sets the template back, and asserts
+the cluster converges onto the old template with an idempotent second pass.
+
+**Rolls through failure.** It drives a roll through the simulator with a node
+failure scheduled mid roll, asserts convergence, capacity, constraints and the
+budget floor after every tick, and asserts the roll still completes with the
+desired count restored.
