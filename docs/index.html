@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Shepherd - Reconciliation Control Loop Playground</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
 <style>
   :root{
     --bg:#f5f5f7;
@@ -236,6 +237,7 @@
 <div class="wrap">
 
   <header class="hero">
+    <img src="logo.svg" alt="Shepherd logo" width="72" height="72">
     <h1>Shepherd</h1>
     <p class="lede">A Kubernetes-style reconciliation control loop for container orchestration. This playground is a teaching-accurate JavaScript reimplementation of the Shepherd engine: deploy apps, watch the scheduler bin-pack pods onto nodes, scale, and kill nodes to see the reconciler restore desired state.</p>
     <div class="repo"><a href="https://github.com/pavanchow/shepherd" target="_blank" rel="noopener">github.com/pavanchow/shepherd &#8599;</a></div>
@@ -243,7 +245,8 @@
 
   <!-- HOW TO USE -->
   <section class="card howto">
-    <h2>How to use this playground</h2>
+    <details>
+    <summary style="cursor:pointer;font-size:20px;font-weight:600">How to use this playground</summary>
     <p class="hint">Shepherd never overcommits a node. It filters feasible nodes, bin-packs onto the tightest fit, and loops until observed state equals desired state.</p>
     <ul class="ctl-list">
       <li><b>Deploy an app</b><span>Name it, pick a replica count and per-pod CPU/mem requests. Optional anti-affinity spreads at most one replica per node.</span></li>
@@ -263,6 +266,7 @@
         <li><b>See anti-affinity:</b> Deploy an app with anti-affinity on and 3 replicas; each replica lands on a different node (one-per-node spread).</li>
       </ol>
     </div>
+    </details>
   </section>
 
   <!-- CONTROLS -->

@@ -1,0 +1,6 @@
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Shepherd logo">
+  <path d="M48 112 V56 a20 20 0 0 1 40 0 a10 10 0 0 1 -20 0" fill="none" stroke="#2ea36b" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="34" cy="104" r="8" fill="#7cc8a4"/>
+  <circle cx="58" cy="110" r="8" fill="#7cc8a4"/>
+  <circle cx="82" cy="104" r="8" fill="#7cc8a4"/>
+</svg>

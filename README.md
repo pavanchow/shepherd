@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" alt="Shepherd logo" width="96">
+
 # Shepherd
 
 A dependency free, Kubernetes style reconciliation control loop you can simulate.
