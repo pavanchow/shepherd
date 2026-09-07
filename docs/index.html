@@ -6,6 +6,7 @@
 <title>Shepherd: a dependency free Kubernetes style reconciliation control loop in Rust</title>
 <meta name="description" content="Shepherd by Pavan Nallamothu: a dependency free, Kubernetes style reconciliation control loop in pure Rust. It schedules pods onto nodes by resource fit, bin packs to keep the cluster tight, keeps replica counts satisfied, and reschedules pods when a node fails, never overcommitting a node. Deterministic, seeded, and fuzzable.">
 <meta name="author" content="Pavan Nallamothu (pavanchow)">
+<meta name="keywords" content="Kubernetes reconciliation, control loop, reconcile to fixed point, pod scheduler, bin packing, replica count, anti-affinity, rolling update, maxUnavailable, maxSurge, PodDisruptionBudget, node failure recovery, cluster simulator, deterministic, dependency free, Rust, Pavan Nallamothu, pavanchow">
 <link rel="canonical" href="https://pavanchow.github.io/shepherd/">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="author" href="https://github.com/pavanchow">
@@ -17,7 +18,7 @@
 <meta name="twitter:title" content="Shepherd: a dependency free Kubernetes style reconciliation control loop in Rust">
 <meta name="twitter:description" content="Deploy apps, watch the scheduler bin pack pods, kill a node, and watch the reconciler restore desired state, live.">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Shepherd","applicationCategory":"DeveloperApplication","operatingSystem":"Cross-platform","description":"Shepherd is a dependency free, Kubernetes style reconciliation control loop in pure Rust. It schedules pods onto nodes by resource fit and constraints, keeps replica counts satisfied, reschedules pods when a node fails, bin packs to keep the cluster tight, and rolls workloads onto new versions under maxUnavailable and maxSurge bounds, all over a deterministic seeded simulator.","url":"https://pavanchow.github.io/shepherd/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/shepherd","license":"https://opensource.org/licenses/MIT"}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Shepherd","applicationCategory":"DeveloperApplication","softwareVersion":"0.1.0","operatingSystem":"Cross-platform","description":"Shepherd is a dependency free, Kubernetes style reconciliation control loop in pure Rust. It schedules pods onto nodes by resource fit and constraints, keeps replica counts satisfied, reschedules pods when a node fails, bin packs to keep the cluster tight, and rolls workloads onto new versions under maxUnavailable and maxSurge bounds, all over a deterministic seeded simulator.","url":"https://pavanchow.github.io/shepherd/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/shepherd","license":"https://opensource.org/licenses/MIT"}
 </script>
 <script type="application/ld+json">
 {"@context":"https://schema.org","@type":"Person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]}
@@ -279,6 +280,30 @@
   footer.site .name{color:var(--ink);font-weight:600}
   footer.site p + p{margin-top:10px}
   @media (max-width:640px){.hero{padding:56px 24px 20px}section.narr{padding:54px 0}}
+
+  nav .v{color:var(--ink-soft);font-family:var(--mono);font-size:12px}
+  .cmp{max-width:820px;margin:36px auto 0}
+  .cmp .r{display:grid;grid-template-columns:minmax(150px,1fr) 2fr;gap:14px 34px;padding:22px 0;border-top:1px solid var(--line)}
+  .cmp .r:first-child{border-top:none}
+  .cmp .r b{font-size:17px;color:var(--ink)}
+  .cmp .r p{color:var(--ink-soft);margin:0}
+  .cmp .r.self b{color:var(--accent)}
+  @media (max-width:640px){.cmp .r{grid-template-columns:1fr;gap:6px}}
+  .pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;max-width:900px;margin:40px auto 0}
+  @media (max-width:640px){.pgrid{grid-template-columns:1fr}}
+  .pcard{background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:20px}
+  .pcard h3{font-family:var(--mono);font-size:15px;margin:0 0 8px;display:flex;align-items:center;gap:9px;color:var(--ink)}
+  .pcard p{color:var(--ink-soft);font-size:14.5px;margin:0}
+  .ptag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.04em;background:var(--accent-soft);color:var(--accent)}
+  .ptag.safe{background:var(--good-soft);color:var(--good)}
+  .ptag.sched{background:var(--bad-soft);color:var(--bad)}
+  .srf{max-width:820px;margin:36px auto 28px}
+  .srf .r{display:grid;grid-template-columns:minmax(150px,1fr) 2fr;gap:14px 34px;padding:22px 0;border-top:1px solid var(--line)}
+  .srf .r:first-child{border-top:none}
+  .srf .r b{font-size:17px;color:var(--ink)}
+  .srf .r p{color:var(--ink-soft);margin:0}
+  @media (max-width:640px){.srf .r{grid-template-columns:1fr;gap:6px}}
+  .caption{font-family:var(--mono);font-size:12px;color:var(--ink-soft);text-align:center;margin:14px auto 0;max-width:720px}
 </style>
 </head>
 <body>
@@ -289,8 +314,11 @@
   <div class="links">
     <a href="#sim">Playground</a>
     <a href="#proof">Proof</a>
+    <a href="#compare">Compare</a>
+    <a href="#primitives">Primitives</a>
     <a href="#use">Use it</a>
     <a class="gh" href="https://github.com/pavanchow/shepherd">GitHub</a>
+    <span class="v">v0.1.0</span>
   </div>
 </div></nav>
 
@@ -401,6 +429,8 @@
     <div class="log" id="log"></div>
   </section>
 
+  <p class="caption">Runs fully client-side, nothing leaves the page. The same reconcile-to-fixed-point loop, bin-packing scheduler, and constraint checks as the Rust library.</p>
+
 </div>
 
 <section id="proof" class="narr"><div class="wrap">
@@ -416,8 +446,38 @@ SHEPHERD_FUZZ_OPS=5000 cargo test --release --test gate</pre>
   <p class="lead" style="margin-top:26px">The sum of pod requests bound to any node never exceeds that node's capacity, checked after every single scheduling decision. Killing a node reschedules its pods to restore the desired count on the remaining feasible nodes, and the same seed produces identical placement. No binding ever violates a taint, node selector, affinity or anti-affinity rule. A template roll never dips below <code>replicas - maxUnavailable</code> or exceeds <code>replicas + maxSurge</code>, and a PodDisruptionBudget caps how many pods may be disrupted at once.</p>
 </div></section>
 
+<section id="compare" class="narr"><div class="wrap">
+  <h2>How it differs</h2>
+  <p class="lead">Real orchestrators are large distributed systems. Shepherd keeps the same reconcile loop and pulls everything else away, so the core idea is something you can read in an afternoon.</p>
+  <div class="cmp">
+    <div class="r"><b>Kubernetes scheduler and controllers</b><p>The production reconcile loop. Powerful and battle tested, but enormous, and it needs a live cluster and etcd. The control loop hides behind network calls and stored state, so the converging core is hard to see, test, or fuzz.</p></div>
+    <div class="r"><b>Nomad</b><p>A smaller single-binary orchestrator, yet still a real distributed system with servers, clients, and cluster state to stand up before you can watch a single placement decision.</p></div>
+    <div class="r self"><b>Shepherd</b><p>The reconcile-to-fixed-point pattern extracted into a few hundred lines of dependency-free Rust with no I/O, no threads, and no randomness beyond one seeded PRNG. Time is a tick counter you inject and failures are scripted events, so the whole system is a deterministic function you can read, unit test, and fuzz in a fraction of a second.</p></div>
+  </div>
+</div></section>
+
+<section id="primitives" class="narr"><div class="wrap">
+  <p class="eyebrow" style="text-align:center">The primitives that matter</p>
+  <h2 style="margin-top:14px">The six moving parts of a reconciler.</h2>
+  <p class="lead">Each is a real piece of the loop, and each is checked from scratch by the randomized property tests.</p>
+  <div class="pgrid">
+    <div class="pcard"><h3><span class="ptag">loop</span> Reconcile to fixed point</h3><p>Create or delete pods and schedule until observed state equals desired, then stop. One more pass at the fixed point changes nothing, so it never oscillates.</p></div>
+    <div class="pcard"><h3><span class="ptag sched">scheduler</span> Bin-packing</h3><p>Among the feasible nodes the scheduler picks the one with the least room left after placing, keeping the cluster tight, with a deterministic tie-break by node id.</p></div>
+    <div class="pcard"><h3><span class="ptag">controller</span> Replica counts</h3><p>Every controller declares a desired replica count. The reconciler drives the running count to it, creating pods when short and removing them when over.</p></div>
+    <div class="pcard"><h3><span class="ptag safe">constraint</span> Affinity and selectors</h3><p>No binding ever violates a taint, a node selector, or an affinity or anti-affinity rule. Anti-affinity spreads at most one matching replica per node.</p></div>
+    <div class="pcard"><h3><span class="ptag safe">recovery</span> Node-failure rescheduling</h3><p>When a node fails its pods are marked lost and its capacity is freed. The reconciler reschedules replacements onto the remaining feasible nodes, identically for a given seed.</p></div>
+    <div class="pcard"><h3><span class="ptag safe">safety</span> Disruption budgets</h3><p>A PodDisruptionBudget caps how many pods a voluntary eviction may disrupt at once, and a template roll stays within maxUnavailable and maxSurge on the way to the new version.</p></div>
+  </div>
+</div></section>
+
 <section id="use" class="narr"><div class="wrap">
   <h2>Use it</h2>
+  <div class="srf">
+    <div class="r"><b>CLI</b><p>Run <code>demo</code> for a scripted tour, or <code>converge --seed --nodes --apps</code> to generate a random workload and reconcile it to a fixed point, printing per-node utilization and per-app desired versus observed.</p></div>
+    <div class="r"><b>Library API</b><p>Build a <code>Cluster</code>, add <code>Node</code>s and a <code>Controller</code>, then call <code>reconcile_to_fixed_point</code> with <code>ScorePolicy::BinPack</code> or <code>LeastLoaded</code> and assert <code>fully_satisfied</code> and <code>verify_capacity</code>.</p></div>
+    <div class="r"><b>Simulator</b><p><code>simulator::Simulator</code> owns the injected clock, the seeded PRNG, and a script of <code>Event</code>s. Each <code>step</code> advances one tick, delivers heartbeats, fires due events, detects failed nodes, and reconciles.</p></div>
+    <div class="r"><b>Correctness gate</b><p><code>tests/gate.rs</code> runs eight randomized property tests and <code>tests/rollout.rs</code> gates rolling updates. Turn up the sweep with <code>SHEPHERD_FUZZ_OPS</code>.</p></div>
+  </div>
   <pre class="term"><span class="cm"># a scripted tour: nodes join, an app is bin packed, it scales,</span>
 <span class="cm"># a node is killed and its pods reschedule, then the node recovers</span>
 cargo run --release -- demo
