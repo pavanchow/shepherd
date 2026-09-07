@@ -3,8 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shepherd - Reconciliation Control Loop Playground</title>
+<title>Shepherd: a dependency free Kubernetes style reconciliation control loop in Rust</title>
+<meta name="description" content="Shepherd by Pavan Nallamothu: a dependency free, Kubernetes style reconciliation control loop in pure Rust. It schedules pods onto nodes by resource fit, bin packs to keep the cluster tight, keeps replica counts satisfied, and reschedules pods when a node fails, never overcommitting a node. Deterministic, seeded, and fuzzable.">
+<meta name="author" content="Pavan Nallamothu (pavanchow)">
+<link rel="canonical" href="https://pavanchow.github.io/shepherd/">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="author" href="https://github.com/pavanchow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Shepherd: a dependency free Kubernetes style reconciliation control loop in Rust">
+<meta property="og:description" content="A reconciler that drives observed cluster state toward desired state: bin packing, replica counts, failure recovery, rolling updates, all deterministic and never overcommitting a node. By Pavan Nallamothu.">
+<meta property="og:url" content="https://pavanchow.github.io/shepherd/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Shepherd: a dependency free Kubernetes style reconciliation control loop in Rust">
+<meta name="twitter:description" content="Deploy apps, watch the scheduler bin pack pods, kill a node, and watch the reconciler restore desired state, live.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Shepherd","applicationCategory":"DeveloperApplication","operatingSystem":"Cross-platform","description":"Shepherd is a dependency free, Kubernetes style reconciliation control loop in pure Rust. It schedules pods onto nodes by resource fit and constraints, keeps replica counts satisfied, reschedules pods when a node fails, bin packs to keep the cluster tight, and rolls workloads onto new versions under maxUnavailable and maxSurge bounds, all over a deterministic seeded simulator.","url":"https://pavanchow.github.io/shepherd/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/shepherd","license":"https://opensource.org/licenses/MIT"}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]}
+</script>
 <style>
   :root{
     --bg:#f5f5f7;
@@ -25,11 +42,12 @@
     --shadow-sm:0 1px 2px rgba(0,0,0,.05);
     --radius:18px;
     --radius-sm:12px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
     --a0:#0071e3; --a1:#34c759; --a2:#ff9500; --a3:#af52de;
     --a4:#ff2d55; --a5:#5ac8fa; --a6:#ffcc00; --a7:#5856d6;
   }
   *{box-sizing:border-box}
-  html{-webkit-text-size-adjust:100%}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
   body{
     margin:0;
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -63,17 +81,7 @@
     }
   }
 
-  .wrap{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
-  header.hero{margin-bottom:34px}
-  .hero h1{font-size:40px;line-height:1.1;letter-spacing:-.02em;margin:0 0 8px;font-weight:700}
-  .hero p.lede{font-size:19px;color:var(--ink-soft);margin:0;max-width:720px}
-  .hero .repo{margin-top:14px}
-  .hero .repo a{
-    color:var(--accent);text-decoration:none;font-weight:500;font-size:15px;
-    display:inline-flex;align-items:center;gap:6px;
-  }
-  .hero .repo a:hover{text-decoration:underline}
-
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
   .card{
     background:var(--panel);
     border:1px solid var(--line);
@@ -198,7 +206,7 @@
 
   /* event log */
   .log{
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-family:var(--mono);
     font-size:12.5px;line-height:1.6;
     background:var(--panel-2);border:1px solid var(--line);border-radius:var(--radius-sm);
     padding:14px 16px;max-height:280px;overflow:auto;
@@ -229,48 +237,101 @@
   .ctl-list b{display:block;font-size:14px;margin-bottom:2px}
   .ctl-list span{font-size:13px;color:var(--ink-soft)}
 
-  .foot{color:var(--ink-soft);font-size:13px;text-align:center;margin-top:20px}
-  .kbd{font-family:ui-monospace,Menlo,monospace;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px}
+  .kbd{font-family:var(--mono);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px}
+
+  /* ===== cocoon-grade shell ===== */
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  nav{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.82);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
+  @media (prefers-color-scheme: dark){nav{background:rgba(0,0,0,.72)}}
+  nav .row{display:flex;justify-content:space-between;align-items:center;height:56px;max-width:1180px;margin:0 auto;padding:0 24px}
+  nav .brand{display:flex;align-items:center;gap:9px;font-size:18px;font-weight:650;letter-spacing:-.01em;color:var(--ink)}
+  nav .brand .gem{width:16px;height:16px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:linear-gradient(135deg,#5ea9ff,#0071e3)}
+  nav .links{display:flex;gap:22px;align-items:center}
+  nav .links a{color:var(--ink);font-size:14.5px;text-decoration:none}
+  nav .links a:hover{color:var(--accent);text-decoration:none}
+  @media (max-width:640px){nav .links a:not(.gh){display:none}}
+
+  .hero{text-align:center;padding:80px 24px 24px}
+  .hero img{display:block;margin:0 auto 18px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin:0}
+  .hero h1{font-size:clamp(38px,6.6vw,60px);line-height:1.06;letter-spacing:-.035em;font-weight:700;margin:16px 0 0;text-wrap:balance}
+  .hero p.sub{max-width:700px;margin:22px auto 0;font-size:clamp(17px,2.1vw,21px);color:var(--ink-soft)}
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:30px}
+  .btn{display:inline-block;padding:12px 26px;border-radius:999px;font-size:15px;font-weight:600;border:1px solid var(--ink);color:var(--ink);text-decoration:none}
+  .btn:hover{opacity:.72;text-decoration:none}
+  .btn.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+
+  details.howto{max-width:900px;margin:8px auto 26px;border:1px solid var(--line);border-radius:14px;padding:2px 22px;background:var(--panel-2)}
+  details.howto > summary{cursor:pointer;font-weight:650;padding:16px 0;list-style:none;font-size:18px}
+  details.howto > summary::-webkit-details-marker{display:none}
+  details.howto > summary::before{content:"\25B8";display:inline-block;margin-right:8px;color:var(--accent);transition:transform .15s}
+  details.howto[open] > summary::before{transform:rotate(90deg)}
+  details.howto .hint{color:var(--ink-soft);margin:0 0 16px;font-size:14px}
+  details.howto{padding-bottom:18px}
+
+  section.narr{border-top:1px solid var(--line);padding:70px 0;margin-top:36px}
+  section.narr h2{font-size:clamp(25px,4.2vw,35px);line-height:1.14;letter-spacing:-.025em;font-weight:660;text-align:center;max-width:780px;margin:0 auto}
+  section.narr .lead{max-width:720px;margin:16px auto 0;text-align:center;color:var(--ink-soft);font-size:16px}
+  pre.term{background:#15161c;color:#ececf4;border-radius:14px;padding:20px 22px;font-family:var(--mono);font-size:13px;line-height:1.6;overflow-x:auto;max-width:780px;margin:28px auto 0}
+  pre.term .cm{color:#8a8d9a}
+  footer.site{padding:60px 24px;border-top:1px solid var(--line);text-align:center;color:var(--ink-soft);margin-top:20px}
+  footer.site .name{color:var(--ink);font-weight:600}
+  footer.site p + p{margin-top:10px}
+  @media (max-width:640px){.hero{padding:56px 24px 20px}section.narr{padding:54px 0}}
 </style>
 </head>
 <body>
+<noscript><div class="wrap" style="padding:40px 24px;color:#6e6e73">Shepherd is a dependency free, Kubernetes style reconciliation control loop in pure Rust by Pavan Nallamothu. It schedules pods onto nodes by resource fit, bin packs to keep the cluster tight, keeps replica counts satisfied, and reschedules pods when a node fails, never overcommitting a node. Source: <a href="https://github.com/pavanchow/shepherd">github.com/pavanchow/shepherd</a>.</div></noscript>
+
+<nav><div class="row">
+  <div class="brand"><span class="gem"></span>Shepherd</div>
+  <div class="links">
+    <a href="#sim">Playground</a>
+    <a href="#proof">Proof</a>
+    <a href="#use">Use it</a>
+    <a class="gh" href="https://github.com/pavanchow/shepherd">GitHub</a>
+  </div>
+</div></nav>
+
+<div class="hero">
+  <img src="logo.svg" alt="Shepherd logo" width="72" height="72">
+  <p class="eyebrow">Rust &middot; reconcile to fixed point</p>
+  <h1>Watch a cluster<br>converge to desired.</h1>
+  <p class="sub">Shepherd is a dependency free, Kubernetes style reconciliation control loop in pure Rust. Declare nodes and apps and it schedules pods by resource fit, bin packs to keep the cluster tight, keeps replica counts satisfied, and reschedules pods when a node fails, never overcommitting a node. Deploy an app below, scale it, and kill a node to watch the reconciler restore the desired state, tick by tick.</p>
+  <div class="cta-row">
+    <a class="btn primary" href="#sim">Open the playground</a>
+    <a class="btn" href="https://github.com/pavanchow/shepherd">View on GitHub</a>
+  </div>
+</div>
+
+<details class="howto">
+  <summary>How to use this playground</summary>
+  <p class="hint">Shepherd never overcommits a node. It filters feasible nodes, bin packs onto the tightest fit, and loops until observed state equals desired state.</p>
+  <ul class="ctl-list">
+    <li><b>Deploy an app</b><span>Name it, pick a replica count and per-pod CPU/mem requests. Optional anti-affinity spreads at most one replica per node.</span></li>
+    <li><b>Scale minus / plus</b><span>Change desired replicas on any app; the reconciler creates or removes pods and reschedules to converge.</span></li>
+    <li><b>Kill node</b><span>Fails a node, marks its pods Lost and frees its capacity. The reconciler reschedules replacements onto healthy nodes.</span></li>
+    <li><b>Add node</b><span>Adds fresh capacity to the cluster so stuck (Pending) pods can finally fit.</span></li>
+    <li><b>Step reconciler</b><span>Runs exactly one reconcile pass so you can watch convergence tick by tick.</span></li>
+    <li><b>Auto-run</b><span>Ticks the reconciler continuously until every app reaches its desired Running count.</span></li>
+  </ul>
+  <div class="tour">
+    <h3>Guided tour (follow in order)</h3>
+    <ol>
+      <li><b>See bin-packing:</b> Deploy <span class="kbd">web</span> with 4 replicas, cpu 300m, mem 256. Notice pods pack tightly onto the fewest nodes rather than spreading evenly.</li>
+      <li><b>See scaling:</b> Press <span class="kbd">+</span> on <span class="kbd">web</span> a few times and watch new pods get created and bound until the app shows a green <b>converged</b> badge.</li>
+      <li><b>See failure recovery:</b> Click <b>Kill node</b> on a node that hosts <span class="kbd">web</span> pods. They go Lost, observed drops below desired, and the reconciler reschedules replacements onto the surviving nodes.</li>
+      <li><b>See insufficient capacity:</b> Scale an app higher than the cluster can hold. It settles on an orange <b>insufficient capacity</b> status. Then press <b>Add node</b> and watch the Pending pods finally bind.</li>
+      <li><b>See anti-affinity:</b> Deploy an app with anti-affinity on and 3 replicas; each replica lands on a different node (one-per-node spread).</li>
+    </ol>
+  </div>
+</details>
+
 <div class="wrap">
 
-  <header class="hero">
-    <img src="logo.svg" alt="Shepherd logo" width="72" height="72">
-    <h1>Shepherd</h1>
-    <p class="lede">A Kubernetes-style reconciliation control loop for container orchestration. This playground is a teaching-accurate JavaScript reimplementation of the Shepherd engine: deploy apps, watch the scheduler bin-pack pods onto nodes, scale, and kill nodes to see the reconciler restore desired state.</p>
-    <div class="repo"><a href="https://github.com/pavanchow/shepherd" target="_blank" rel="noopener">github.com/pavanchow/shepherd &#8599;</a></div>
-  </header>
-
-  <!-- HOW TO USE -->
-  <section class="card howto">
-    <details>
-    <summary style="cursor:pointer;font-size:20px;font-weight:600">How to use this playground</summary>
-    <p class="hint">Shepherd never overcommits a node. It filters feasible nodes, bin-packs onto the tightest fit, and loops until observed state equals desired state.</p>
-    <ul class="ctl-list">
-      <li><b>Deploy an app</b><span>Name it, pick a replica count and per-pod CPU/mem requests. Optional anti-affinity spreads at most one replica per node.</span></li>
-      <li><b>Scale &minus; / +</b><span>Change desired replicas on any app; the reconciler creates or removes pods and reschedules to converge.</span></li>
-      <li><b>Kill node</b><span>Fails a node, marks its pods Lost and frees its capacity. The reconciler reschedules replacements onto healthy nodes.</span></li>
-      <li><b>Add node</b><span>Adds fresh capacity to the cluster so stuck (Pending) pods can finally fit.</span></li>
-      <li><b>Step reconciler</b><span>Runs exactly one reconcile pass so you can watch convergence tick by tick.</span></li>
-      <li><b>Auto-run</b><span>Ticks the reconciler continuously until every app reaches its desired Running count.</span></li>
-    </ul>
-    <div class="tour">
-      <h3>Guided tour (follow in order)</h3>
-      <ol>
-        <li><b>See bin-packing:</b> Deploy <span class="kbd">web</span> with 4 replicas, cpu 300m, mem 256. Notice pods pack tightly onto the fewest nodes rather than spreading evenly.</li>
-        <li><b>See scaling:</b> Press <span class="kbd">+</span> on <span class="kbd">web</span> a few times and watch new pods get created and bound until the app shows a green <b>converged</b> badge.</li>
-        <li><b>See failure recovery:</b> Click <b>Kill node</b> on a node that hosts <span class="kbd">web</span> pods. They go Lost, observed drops below desired, and the reconciler reschedules replacements onto the surviving nodes.</li>
-        <li><b>See insufficient capacity:</b> Scale an app higher than the cluster can hold. It settles on an orange <b>insufficient capacity</b> status. Then press <b>Add node</b> and watch the Pending pods finally bind.</li>
-        <li><b>See anti-affinity:</b> Deploy an app with anti-affinity on and 3 replicas; each replica lands on a different node (one-per-node spread).</li>
-      </ol>
-    </div>
-    </details>
-  </section>
-
   <!-- CONTROLS -->
-  <section class="card">
+  <section class="card" id="sim">
     <h2>Deploy an app <span class="sub">create a Deployment / ReplicaSet</span></h2>
     <div class="grid-controls">
       <form class="deploy" id="deployForm" autocomplete="off">
@@ -292,7 +353,7 @@
         </div>
         <div class="field span toggle-row">
           <input type="checkbox" id="appAnti">
-          <label for="appAnti">Anti-affinity &mdash; spread at most one replica per node (by app label)</label>
+          <label for="appAnti">Anti-affinity: spread at most one replica per node (by app label)</label>
         </div>
         <div class="field span">
           <button type="submit">Deploy</button>
@@ -340,8 +401,37 @@
     <div class="log" id="log"></div>
   </section>
 
-  <div class="foot">Shepherd playground &mdash; deterministic bin-packing scheduler + reconciliation loop, reimplemented in JavaScript for learning.</div>
 </div>
+
+<section id="proof" class="narr"><div class="wrap">
+  <h2>It converges, and it never overcommits a node</h2>
+  <p class="lead">The provable core is that the reconciler converges and never overcommits a node. Eight randomized property tests in <code>tests/gate.rs</code> enforce it, each rechecking its property from scratch with independent verifiers, and a second file gates rolling updates. The reconciler is a few hundred lines of ordinary Rust with no I/O, no threads, and no randomness beyond one seeded PRNG.</p>
+  <pre class="term"><span class="cm"># eight property tests: convergence, capacity invariant, failure recovery</span>
+<span class="cm"># and determinism, constraints, adversarial edges, node rejoins,</span>
+<span class="cm"># the capacity boundary, and idempotence, plus a rollout gate</span>
+cargo test
+
+<span class="cm"># crank the randomized sweep as high as you like</span>
+SHEPHERD_FUZZ_OPS=5000 cargo test --release --test gate</pre>
+  <p class="lead" style="margin-top:26px">The sum of pod requests bound to any node never exceeds that node's capacity, checked after every single scheduling decision. Killing a node reschedules its pods to restore the desired count on the remaining feasible nodes, and the same seed produces identical placement. No binding ever violates a taint, node selector, affinity or anti-affinity rule. A template roll never dips below <code>replicas - maxUnavailable</code> or exceeds <code>replicas + maxSurge</code>, and a PodDisruptionBudget caps how many pods may be disrupted at once.</p>
+</div></section>
+
+<section id="use" class="narr"><div class="wrap">
+  <h2>Use it</h2>
+  <pre class="term"><span class="cm"># a scripted tour: nodes join, an app is bin packed, it scales,</span>
+<span class="cm"># a node is killed and its pods reschedule, then the node recovers</span>
+cargo run --release -- demo
+
+<span class="cm"># generate a random workload from a seed and reconcile to a fixed point</span>
+cargo run --release -- converge --seed 7 --nodes 6 --apps 4
+
+cargo test</pre>
+</div></section>
+
+<footer class="site">
+  <p>Shepherd is MIT licensed. Zero dependencies, pure Rust std. Source, tests, and design notes are on <a href="https://github.com/pavanchow/shepherd">GitHub</a>.</p>
+  <p>By <span class="name">Pavan Nallamothu</span>.</p>
+</footer>
 
 <script>
 "use strict";
