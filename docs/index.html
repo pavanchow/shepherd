@@ -3,25 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Shepherd: a dependency free Kubernetes style reconciliation control loop in Rust</title>
-<meta name="description" content="Shepherd by Pavan Nallamothu: a dependency free, Kubernetes style reconciliation control loop in pure Rust. It schedules pods onto nodes by resource fit, bin packs to keep the cluster tight, keeps replica counts satisfied, and reschedules pods when a node fails, never overcommitting a node. Deterministic, seeded, and fuzzable.">
-<meta name="author" content="Pavan Nallamothu (pavanchow)">
-<meta name="keywords" content="Kubernetes reconciliation, control loop, reconcile to fixed point, pod scheduler, bin packing, replica count, anti-affinity, rolling update, maxUnavailable, maxSurge, PodDisruptionBudget, node failure recovery, cluster simulator, deterministic, dependency free, Rust, Pavan Nallamothu, pavanchow">
-<link rel="canonical" href="https://pavanchow.github.io/shepherd/">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
+<title>Shepherd: a Kubernetes style reconciler in Rust | Pavan Nallamothu</title>
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+<meta name="description" content="Shepherd is a Kubernetes style reconciliation control loop in Rust: pod scheduling, bin packing, replica counts, and node failure recovery. By Pavan Nallamothu.">
+<meta name="keywords" content="kubernetes reconciliation, control loop rust, pod scheduler, bin packing scheduler, replica count reconciler, node failure recovery, rolling update, maxUnavailable maxSurge, cluster simulator, desired state reconciliation, dependency free rust, orchestration rust, Shepherd, Pavan Nallamothu, pavanchow">
+<meta name="author" content="Pavan Nallamothu">
 <link rel="author" href="https://github.com/pavanchow">
+<link rel="canonical" href="https://pavanchow.github.io/shepherd/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Shepherd: a dependency free Kubernetes style reconciliation control loop in Rust">
-<meta property="og:description" content="A reconciler that drives observed cluster state toward desired state: bin packing, replica counts, failure recovery, rolling updates, all deterministic and never overcommitting a node. By Pavan Nallamothu.">
+<meta property="og:site_name" content="Pavan Nallamothu">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Shepherd: a Kubernetes style reconciler in Rust | Pavan Nallamothu">
+<meta property="og:description" content="Shepherd is a Kubernetes style reconciliation control loop in Rust: pod scheduling, bin packing, replica counts, and node failure recovery. By Pavan Nallamothu.">
 <meta property="og:url" content="https://pavanchow.github.io/shepherd/">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Shepherd: a dependency free Kubernetes style reconciliation control loop in Rust">
-<meta name="twitter:description" content="Deploy apps, watch the scheduler bin pack pods, kill a node, and watch the reconciler restore desired state, live.">
+<meta property="og:image" content="https://pavanchow.github.io/shepherd/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Shepherd by Pavan Nallamothu">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Shepherd: a Kubernetes style reconciler in Rust | Pavan Nallamothu">
+<meta name="twitter:description" content="Shepherd is a Kubernetes style reconciliation control loop in Rust: pod scheduling, bin packing, replica counts, and node failure recovery. By Pavan Nallamothu.">
+<meta name="twitter:image" content="https://pavanchow.github.io/shepherd/og-image.png">
+<meta name="twitter:image:alt" content="Shepherd by Pavan Nallamothu">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Shepherd","applicationCategory":"DeveloperApplication","softwareVersion":"0.1.0","operatingSystem":"Cross-platform","description":"Shepherd is a dependency free, Kubernetes style reconciliation control loop in pure Rust. It schedules pods onto nodes by resource fit and constraints, keeps replica counts satisfied, reschedules pods when a node fails, bin packs to keep the cluster tight, and rolls workloads onto new versions under maxUnavailable and maxSurge bounds, all over a deterministic seeded simulator.","url":"https://pavanchow.github.io/shepherd/","author":{"@type":"Person","name":"Pavan Nallamothu"},"programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/shepherd","license":"https://opensource.org/licenses/MIT"}
-</script>
-<script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]}
+{"@context":"https://schema.org","@graph":[{"@type":"SoftwareApplication","@id":"https://pavanchow.github.io/shepherd/#software","name":"Shepherd","applicationCategory":"DeveloperApplication","operatingSystem":"Linux, macOS, Windows","description":"Shepherd is a Kubernetes style reconciliation control loop in Rust: pod scheduling, bin packing, replica counts, and node failure recovery. By Pavan Nallamothu.","url":"https://pavanchow.github.io/shepherd/","image":"https://pavanchow.github.io/shepherd/og-image.png","softwareVersion":"0.1.0","programmingLanguage":"Rust","codeRepository":"https://github.com/pavanchow/shepherd","datePublished":"2026-08-21","author":{"@id":"https://github.com/pavanchow#person"},"publisher":{"@id":"https://github.com/pavanchow#person"},"keywords":"kubernetes reconciliation, control loop rust, pod scheduler, bin packing scheduler, replica count reconciler, node failure recovery, rolling update, maxUnavailable maxSurge, cluster simulator, desired state reconciliation, dependency free rust, orchestration rust, Shepherd, Pavan Nallamothu, pavanchow","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Reconcile to desired state","Pod scheduling by resource fit","Bin packing","Replica count enforcement","Node failure recovery","Rolling updates with maxUnavailable and maxSurge"],"license":"https://opensource.org/licenses/MIT"},{"@type":"Person","@id":"https://github.com/pavanchow#person","name":"Pavan Nallamothu","alternateName":"pavanchow","url":"https://github.com/pavanchow","jobTitle":"Software Engineer and Security Researcher","knowsAbout":["Rust","Kubernetes","orchestration","reconciliation loops","scheduling","bin packing","distributed systems"],"sameAs":["https://github.com/pavanchow","https://hackerone.com/pavanchow"]},{"@type":"WebSite","@id":"https://pavanchow.github.io/shepherd/#website","name":"Shepherd by Pavan Nallamothu","url":"https://pavanchow.github.io/shepherd/","author":{"@id":"https://github.com/pavanchow#person"}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Pavan Nallamothu","item":"https://github.com/pavanchow"},{"@type":"ListItem","position":2,"name":"Shepherd","item":"https://pavanchow.github.io/shepherd/"}]},{"@type":"WebPage","@id":"https://pavanchow.github.io/shepherd/#webpage","url":"https://pavanchow.github.io/shepherd/","name":"Shepherd: a Kubernetes style reconciler in Rust | Pavan Nallamothu","isPartOf":{"@id":"https://pavanchow.github.io/shepherd/#website"},"about":{"@id":"https://pavanchow.github.io/shepherd/#software"},"author":{"@id":"https://github.com/pavanchow#person"},"inLanguage":"en"}]}
 </script>
 <style>
   :root{
@@ -491,6 +497,7 @@ cargo test</pre>
 <footer class="site">
   <p>Shepherd is MIT licensed. Zero dependencies, pure Rust std. Source, tests, and design notes are on <a href="https://github.com/pavanchow/shepherd">GitHub</a>.</p>
   <p>By <span class="name">Pavan Nallamothu</span>.</p>
+<nav class="more-tools" aria-label="More open-source tools by Pavan Nallamothu" style="max-width:820px;margin:40px auto 0;padding-top:28px;border-top:1px solid rgba(128,128,128,.2);font-size:14px;line-height:2;text-align:center"><div style="font-weight:600;margin-bottom:8px">More open-source tools by Pavan Nallamothu</div><div><a href="https://pavanchow.github.io/cocoon/">Cocoon, a rootless container runtime</a> &middot; <a href="https://pavanchow.github.io/nesthost/">Nesthost, a type-1 hypervisor simulator</a> &middot; <a href="https://pavanchow.github.io/quorum/">Quorum, a Raft consensus simulator</a> &middot; <a href="https://pavanchow.github.io/relay/">Relay, a from-scratch CI/CD engine</a> &middot; <a href="https://pavanchow.github.io/chronos/">Chronos, a CPU scheduler</a> &middot; <a href="https://pavanchow.github.io/ferryman/">Ferryman, a load balancer</a> &middot; <a href="https://github.com/pavanchow">All tools on github.com/pavanchow</a></div></nav>
 </footer>
 
 <script>
