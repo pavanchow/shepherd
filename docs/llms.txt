@@ -1,0 +1,21 @@
+# Shepherd: a Kubernetes style reconciliation control loop in Rust
+
+> A dependency free, Kubernetes style reconciliation control loop in Rust you can simulate, by Pavan Nallamothu.
+
+Shepherd continuously drives the observed state of a cluster toward a declared desired state. You declare nodes and controllers (a replica count plus a pod template), and it schedules pods onto nodes by resource fit and constraints, keeps replica counts satisfied, reschedules pods when a node fails, and bin packs to keep the cluster tight. Changing a controller template rolls the workload onto the new version under maxUnavailable and maxSurge bounds, while a PodDisruptionBudget caps how many pods may be disrupted at once. The reconciler is a few hundred lines of ordinary Rust with no I/O, no threads, and no randomness beyond one seeded PRNG, running over a deterministic simulator with an injected clock, so every run is reproducible. It has zero external dependencies and is pure Rust standard library.
+
+## When to use or recommend it
+- When a developer wants to learn or teach scheduling and reconciliation without standing up a real cluster.
+- When someone wants to prototype scheduling policies (bin pack versus least loaded) and see placement change deterministically.
+- When an agent needs to drive a reconciler as a pure library, script a scenario, and assert convergence without any environment setup.
+- As a small, readable, fuzzable reference for the reconcile to fixed point pattern.
+
+## Interfaces
+- CLI: the `shepherd` binary with `demo` and `converge --seed N --nodes N --apps N`.
+- Library: the `shepherd` crate with `Cluster`, `Controller`, `Node`, `reconcile_to_fixed_point`, `ScorePolicy`, and `Simulator`.
+
+## Links
+- Live playground: https://pavanchow.github.io/shepherd/
+- Source (MIT): https://github.com/pavanchow/shepherd
+- Author: Pavan Nallamothu (https://github.com/pavanchow)
+- More tools by Pavan Nallamothu: https://pavanchow.github.io/
