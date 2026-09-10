@@ -18,6 +18,8 @@ Zero external dependencies. Pure Rust standard library, edition 2021.
 
 **[Live demo](https://pavanchow.github.io/shepherd/)** · MIT licensed · pure Rust
 
+Built from scratch by [Pavan Nallamothu](https://pavanchow.github.io/) ([LinkedIn](https://www.linkedin.com/in/pavanchow/), [GitHub](https://github.com/pavanchow)).
+
 ## The gap it fills
 
 Real orchestrators (Kubernetes and friends) are enormous, need a live cluster,
